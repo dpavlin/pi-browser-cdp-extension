@@ -381,7 +381,13 @@ export default function browserConfigExtension(pi: ExtensionAPI) {
           }`,
           "",
           "Config (set KEY=VAL to change):",
-          ...ALL_KEYS.map((k) => `  ${k}=${cfg[k]}	${descriptions[k] ?? ""}`),
+          ...ALL_KEYS.map(
+            (k) => {
+              const value = `  ${k}=${cfg[k]}`;
+              const padding = Math.max(30 - value.length, 0);
+              return `${value}${" ".repeat(padding)}${descriptions[k] ?? ""}`;
+            }
+          ),
         ];
 
         if (lastError) {
