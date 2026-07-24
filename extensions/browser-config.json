@@ -5,5 +5,7 @@
   "scrollDynamicDefault": true,
   "browserTimeoutMs": 60000,
   "browserLaunchBrowser": true,
+  "maxTimeoutMs": 600000,
+  "maxMetadataLength": 30000,
   "CONFIG_VERSION": 1
 }

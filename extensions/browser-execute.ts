@@ -5,16 +5,20 @@ import { executeBrowserCode, type BrowserExecuteParameters } from "../src/browse
 
 console.error("[DEBUG] browser-execute.ts: Extension loading...");
 
-const MAX_METADATA_LENGTH = 30_000;
-
-// Use config value as default timeout if available
+// Config-driven constants loaded from browser-config.json
 let DEFAULT_TIMEOUT: number | undefined;
+let MAX_TIMEOUT_MS: number = 600_000;
+let MAX_METADATA_LENGTH: number = 30_000;
 (async () => {
   try {
     const { cfg } = await import("./browser-config.js");
     DEFAULT_TIMEOUT = Number(cfg.browserTimeoutMs) || undefined;
+    MAX_TIMEOUT_MS = Number(cfg.maxTimeoutMs) || 600_000;
+    MAX_METADATA_LENGTH = Number(cfg.maxMetadataLength) || 30_000;
   } catch {
     DEFAULT_TIMEOUT = undefined;
+    MAX_TIMEOUT_MS = 600_000;
+    MAX_METADATA_LENGTH = 30_000;
   }
 })();
 
@@ -40,6 +44,11 @@ const BrowserExecuteParams = Type.Object({
   timeout: Type.Optional(
     Type.Number({
       description: "Optional timeout in milliseconds. Default 60000; maximum 600000. CPU-bound snippets without await yield points may overrun.",
+    }),
+  ),
+  maxTimeoutMs: Type.Optional(
+    Type.Number({
+      description: "Maximum allowed timeout in milliseconds. Overrides the default hard cap. Must be >= timeout.",
     }),
   ),
 });
@@ -80,9 +89,11 @@ Security: CDP controls the connected browser. Only use this tool against browser
 
       try {
         const result = await executeBrowserCode(
-          params.timeout !== undefined || DEFAULT_TIMEOUT !== undefined
-            ? { ...params, timeout: params.timeout ?? DEFAULT_TIMEOUT! } as BrowserExecuteParameters
-            : params as BrowserExecuteParameters,
+          {
+            ...params,
+            timeout: params.timeout ?? DEFAULT_TIMEOUT,
+            maxTimeoutMs: params.maxTimeoutMs ?? MAX_TIMEOUT_MS,
+          } as BrowserExecuteParameters,
           {
           sessionID,
           workspaceDir,

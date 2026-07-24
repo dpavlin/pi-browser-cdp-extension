@@ -30,6 +30,8 @@ const DEFAULTS: Record<string, number | boolean | string> = {
   scrollDynamicDefault: true,
   browserTimeoutMs: 60000,
   browserLaunchBrowser: true,
+  maxTimeoutMs: 600_000,
+  maxMetadataLength: 30_000,
   CONFIG_VERSION: 1,
 };
 
@@ -38,6 +40,8 @@ const NUMERIC_KEYS = new Set([
   "keepTabVisibleMs",
   "chromePort",
   "browserTimeoutMs",
+  "maxTimeoutMs",
+  "maxMetadataLength",
 ]);
 const BOOLEAN_KEYS = new Set([
   "scrollDynamicDefault",

@@ -9,6 +9,7 @@ export type BrowserExecuteParameters = {
   code: string;
   description: string;
   timeout?: number;
+  maxTimeoutMs?: number;
 };
 
 export type ExecuteContext = {
@@ -184,7 +185,8 @@ export async function executeBrowserCode(args: BrowserExecuteParameters, ctx: Ex
   startGlobalListening();
 
   try {
-    const timeoutMs = Math.min(args.timeout ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
+    const maxTimeout = args.maxTimeoutMs ?? MAX_TIMEOUT_MS;
+    const timeoutMs = Math.min(args.timeout ?? DEFAULT_TIMEOUT_MS, maxTimeout);
     const ran = await Promise.race([wrapped(session, snippetConsole, dynamicImport), timeoutSignal(timeoutMs)]);
     await new Promise((resolve) => setImmediate(resolve));
     if (snippetError) {
