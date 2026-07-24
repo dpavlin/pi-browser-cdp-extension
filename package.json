@@ -20,6 +20,7 @@
   ],
   "pi": {
     "extensions": [
+      "./extensions/browser-config.ts",
       "./extensions/browser-execute.ts",
       "./extensions/browser-execute-web.ts"
     ],
