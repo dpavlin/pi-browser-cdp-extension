@@ -7,6 +7,17 @@ console.error("[DEBUG] browser-execute.ts: Extension loading...");
 
 const MAX_METADATA_LENGTH = 30_000;
 
+// Use config value as default timeout if available
+let DEFAULT_TIMEOUT: number | undefined;
+(async () => {
+  try {
+    const { cfg } = await import("./browser-config.js");
+    DEFAULT_TIMEOUT = Number(cfg.browserTimeoutMs) || undefined;
+  } catch {
+    DEFAULT_TIMEOUT = undefined;
+  }
+})();
+
 const BrowserExecuteParams = Type.Object({
   code: Type.String({
     description:
@@ -68,7 +79,11 @@ Security: CDP controls the connected browser. Only use this tool against browser
       const workspaceDir = workspaceDirOf(ctx.cwd);
 
       try {
-        const result = await executeBrowserCode(params as BrowserExecuteParameters, {
+        const result = await executeBrowserCode(
+          params.timeout !== undefined || DEFAULT_TIMEOUT !== undefined
+            ? { ...params, timeout: params.timeout ?? DEFAULT_TIMEOUT! } as BrowserExecuteParameters
+            : params as BrowserExecuteParameters,
+          {
           sessionID,
           workspaceDir,
           profileDir: params.profileDir,

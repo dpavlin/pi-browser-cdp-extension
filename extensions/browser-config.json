@@ -3,7 +3,7 @@
   "chromePort": 9333,
   "chromeProfileDir": "",
   "scrollDynamicDefault": true,
-  "browserTimeout": 60000,
+  "browserTimeoutMs": 60000,
   "browserLaunchBrowser": true,
   "CONFIG_VERSION": 1
 }

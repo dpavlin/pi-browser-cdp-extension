@@ -56,7 +56,7 @@ describe("browser-config", () => {
 				const { cfg } = await import("../extensions/browser-config.js");
 				expect(cfg.keepTabVisibleMs).toBe(15000);
 				expect(cfg.chromePort).toBe(9333);
-				expect(cfg.browserTimeout).toBe(60000);
+				expect(cfg.browserTimeoutMs).toBe(60000);
 				expect(cfg.scrollDynamicDefault).toBe(true);
 				expect(cfg.browserLaunchBrowser).toBe(true);
 			} finally {

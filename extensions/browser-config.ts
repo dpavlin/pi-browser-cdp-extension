@@ -28,7 +28,7 @@ const DEFAULTS: Record<string, number | boolean | string> = {
   chromePort: 9333,
   chromeProfileDir: "",
   scrollDynamicDefault: true,
-  browserTimeout: 60000,
+  browserTimeoutMs: 60000,
   browserLaunchBrowser: true,
   CONFIG_VERSION: 1,
 };
@@ -37,7 +37,7 @@ const DEFAULTS: Record<string, number | boolean | string> = {
 const NUMERIC_KEYS = new Set([
   "keepTabVisibleMs",
   "chromePort",
-  "browserTimeout",
+  "browserTimeoutMs",
 ]);
 const BOOLEAN_KEYS = new Set([
   "scrollDynamicDefault",
