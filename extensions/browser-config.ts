@@ -264,29 +264,28 @@ export default function browserConfigExtension(pi: ExtensionAPI) {
 
       if (trimmed === "tabs") {
         // Show Chrome tabs
-        listChromeTabs()
-          .then((tabs) => {
-            if (tabs.length === 0) {
-              ctx.ui.notify(
-                "Browser: no Chrome tabs found\n\n  Ensure Chrome is running with --remote-debugging-port",
-                "info"
-              );
-              return;
-            }
-            const lines = [
-              `Browser: ${tabs.length} tab(s) open`,
-              "",
-              ...tabs.map((t, i) =>
-                `  ${i}: ${t.title || "(untitled)"} — ${t.url || "(about:blank)"}`
-              ),
-              "",
-              `  Use /browser close [index] or /browser close all to close tab(s)`,
-            ].join("\n");
-            ctx.ui.notify(lines, "info");
-          })
-          .catch(() => {
-            ctx.ui.notify("Browser: failed to list tabs", "info");
-          });
+        try {
+          const tabs = await listChromeTabs();
+          if (tabs.length === 0) {
+            ctx.ui.notify(
+              "Browser: no Chrome tabs found\n\n  Ensure Chrome is running with --remote-debugging-port",
+              "info"
+            );
+            return;
+          }
+          const lines = [
+            `Browser: ${tabs.length} tab(s) open`,
+            "",
+            ...tabs.map((t, i) =>
+              `  ${i}: ${t.title || "(untitled)"} — ${t.url || "(about:blank)"}`
+            ),
+            "",
+            `  Use /browser close [index] or /browser close all to close tab(s)`,
+          ].join("\n");
+          ctx.ui.notify(lines, "info");
+        } catch {
+          ctx.ui.notify("Browser: failed to list tabs", "info");
+        }
         return;
       }
 
@@ -294,21 +293,18 @@ export default function browserConfigExtension(pi: ExtensionAPI) {
         const closeArg = trimmed.slice(6).trim();
         if (closeArg === "all") {
           // Close all tabs
-          listChromeTabs()
-            .then((tabs) => {
-              if (tabs.length === 0) {
-                ctx.ui.notify("Browser: no tabs to close", "info");
-                return;
-              }
-              const promises = tabs.map((t) => closeChromeTab(t.id));
-              Promise.all(promises).then((results) => {
-                const closed = results.filter((r) => r.ok).length;
-                ctx.ui.notify(`Browser: closed ${closed}/${tabs.length} tab(s)`, "info");
-              });
-            })
-            .catch(() => {
-              ctx.ui.notify("Browser: failed to close tabs", "info");
-            });
+          try {
+            const tabs = await listChromeTabs();
+            if (tabs.length === 0) {
+              ctx.ui.notify("Browser: no tabs to close", "info");
+              return;
+            }
+            const results = await Promise.all(tabs.map((t) => closeChromeTab(t.id)));
+            const closed = results.filter((r) => r.ok).length;
+            ctx.ui.notify(`Browser: closed ${closed}/${tabs.length} tab(s)`, "info");
+          } catch {
+            ctx.ui.notify("Browser: failed to close tabs", "info");
+          }
           return;
         }
 
@@ -322,28 +318,26 @@ export default function browserConfigExtension(pi: ExtensionAPI) {
           return;
         }
 
-        listChromeTabs()
-          .then((tabs) => {
-            if (index >= tabs.length) {
-              ctx.ui.notify(
-                `Browser: only ${tabs.length} tab(s) open, index ${index} out of range`,
-                "info"
-              );
-              return;
-            }
-            const tab = tabs[index]!;
-            return closeChromeTab(tab.id).then(() => {
-              ctx.ui.notify(`Browser: closed "${tab.title || tab.url}"`, "info");
-            });
-          })
-          .catch(() => {
-            ctx.ui.notify("Browser: failed to close tab", "info");
-          });
+        try {
+          const tabs = await listChromeTabs();
+          if (index >= tabs.length) {
+            ctx.ui.notify(
+              `Browser: only ${tabs.length} tab(s) open, index ${index} out of range`,
+              "info"
+            );
+            return;
+          }
+          const tab = tabs[index]!;
+          await closeChromeTab(tab.id);
+          ctx.ui.notify(`Browser: closed "${tab.title || tab.url}"`, "info");
+        } catch {
+          ctx.ui.notify("Browser: failed to close tab", "info");
+        }
         return;
       }
 
       // No args — show status
-      (async () => {
+      try {
         const conn = await checkChromeConnection();
         chromeConnected = conn.connected;
         chromeUrl = conn.url ?? null;
@@ -370,7 +364,9 @@ export default function browserConfigExtension(pi: ExtensionAPI) {
         }
 
         ctx.ui.notify(lines.join("\n"), "info");
-      })();
+      } catch {
+        ctx.ui.notify("Browser: failed to get status", "info");
+      }
     },
   });
 }
