@@ -1,4 +1,15 @@
 {
+  "_descriptions": {
+    "keepTabVisibleMs": "Tab visible delay after extraction (Ms).",
+    "chromePort": "Chrome --remote-debugging-port number.",
+    "chromeProfileDir": "Chrome user-data dir (leave empty for default profile).",
+    "scrollDynamicDefault": "Auto-scroll pages to trigger lazy loading.",
+    "browserTimeoutMs": "Default timeout for browser_execute snippets (Ms).",
+    "browserLaunchBrowser": "Auto-launch Chrome if not running.",
+    "maxTimeoutMs": "Hard cap on execution timeout (Ms).",
+    "maxMetadataLength": "Output truncation threshold (chars).",
+    "CONFIG_VERSION": "Internal version stamp. Do not edit."
+  },
   "keepTabVisibleMs": 15000,
   "chromePort": 9333,
   "chromeProfileDir": "",

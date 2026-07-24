@@ -22,6 +22,19 @@ const USER_CONFIG_PATH = join(USER_CONFIG_DIR, "browser-config.json");
 
 const CONFIG_VERSION = 1;
 
+// Config descriptions — shown in /browser help output.
+const DESCRIPTIONS: Record<string, string> = {
+  keepTabVisibleMs: "Tab visible delay after extraction (Ms).",
+  chromePort: "Chrome --remote-debugging-port number.",
+  chromeProfileDir: "Chrome user-data dir (leave empty for default profile).",
+  scrollDynamicDefault: "Auto-scroll pages to trigger lazy loading.",
+  browserTimeoutMs: "Default timeout for browser_execute snippets (Ms).",
+  browserLaunchBrowser: "Auto-launch Chrome if not running.",
+  maxTimeoutMs: "Hard cap on execution timeout (Ms).",
+  maxMetadataLength: "Output truncation threshold (chars).",
+  CONFIG_VERSION: "Internal version stamp. Do not edit.",
+};
+
 // Default values that ship with the extension.
 const DEFAULTS: Record<string, number | boolean | string> = {
   keepTabVisibleMs: 15000,
@@ -77,12 +90,22 @@ function loadUserConfig(): Record<string, unknown> | null {
 }
 
 // Merge defaults + user overrides, write user config if missing.
-export const cfg: Record<string, number | boolean | string> = (() => {
-  const extDefaults = loadExtensionDefaults();
-  const userConfig = loadUserConfig();
+const extDefaults = loadExtensionDefaults();
+const userConfig = loadUserConfig();
 
+// Load descriptions from file (if present) and merge with hardcoded defaults.
+const fileDescriptions = (extDefaults as Record<string, unknown>)?.["_descriptions"] as
+  | Record<string, string>
+  | undefined;
+export const descriptions: Record<string, string> = { ...DESCRIPTIONS, ...(fileDescriptions ?? {}) };
+
+// Strip _descriptions from merged config.
+const { _descriptions: _, ...extWithoutDesc }: Record<string, unknown> = extDefaults;
+const { _descriptions: __, ...userWithoutDesc }: Record<string, unknown> = userConfig ?? {};
+
+export const cfg: Record<string, number | boolean | string> = (() => {
   // Merge: defaults first, then user overrides.
-  const merged = { ...extDefaults, ...(userConfig ?? {}) } as Record<
+  const merged = { ...extWithoutDesc, ...(userWithoutDesc ?? {}) } as Record<
     string,
     number | boolean | string
   >;
@@ -358,7 +381,7 @@ export default function browserConfigExtension(pi: ExtensionAPI) {
           }`,
           "",
           "Config (set KEY=VAL to change):",
-          ...ALL_KEYS.map((k) => `  ${k}=${cfg[k]}`),
+          ...ALL_KEYS.map((k) => `  ${k}=${cfg[k]}	${descriptions[k] ?? ""}`),
         ];
 
         if (lastError) {

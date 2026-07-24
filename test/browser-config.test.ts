@@ -64,6 +64,32 @@ describe("browser-config", () => {
 			}
 		});
 
+		it("loads descriptions from bundled config", async () => {
+			const oldHome = withHome(testHome);
+			try {
+				const { descriptions } = await import("../extensions/browser-config.js");
+				expect(descriptions.keepTabVisibleMs).toBe("Tab visible delay after extraction (Ms).");
+				expect(descriptions.chromePort).toBe("Chrome --remote-debugging-port number.");
+				expect(descriptions.browserTimeoutMs).toBe("Default timeout for browser_execute snippets (Ms).");
+				expect(descriptions.maxTimeoutMs).toBe("Hard cap on execution timeout (Ms).");
+				expect(descriptions.maxMetadataLength).toBe("Output truncation threshold (chars).");
+				expect(descriptions.CONFIG_VERSION).toBe("Internal version stamp. Do not edit.");
+			} finally {
+				restoreHome(oldHome);
+			}
+		});
+
+		it("strips _descriptions from merged config", async () => {
+			const oldHome = withHome(testHome);
+			try {
+				const { cfg } = await import("../extensions/browser-config.js");
+				expect(cfg["_descriptions"]).toBeUndefined();
+				expect(cfg.CONFIG_VERSION).toBe(1);
+			} finally {
+				restoreHome(oldHome);
+			}
+		});
+
 		it("user config overrides extension defaults", async () => {
 			const oldHome = withHome(testHome);
 			try {
