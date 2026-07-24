@@ -1,21 +1,24 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-// Temporarily override process.env.HOME for testing user config path.
-function withHome(newHome: string): string {
-	const old = process.env.HOME;
-	process.env.HOME = newHome;
-	return old ?? "";
-}
+// Path to the actual config file (in the extension directory).
+const EXT_DIR = dirname(fileURLToPath(import.meta.url));
+const configPath = join(EXT_DIR, "..", "extensions", "browser-config.json");
 
-function restoreHome(old: string): void {
-	if (old === "") delete process.env.HOME;
-	else process.env.HOME = old;
+function cleanupConfig(): void {
+	try {
+		if (existsSync(configPath)) {
+			unlinkSync(configPath);
+		}
+	} catch {
+		// ignore
+	}
 }
 
 // ============================================================================
@@ -23,21 +26,8 @@ function restoreHome(old: string): void {
 // ============================================================================
 
 describe("browser-config", () => {
-	// Test-specific HOME directory to avoid polluting real ~/.pi/.
-	const testHome = "/tmp/pi-browser-config-test";
-
 	beforeEach(() => {
-		// Create test directories synchronously.
-		mkdirSync(testHome, { recursive: true });
-		mkdirSync(join(testHome, ".pi"), { recursive: true });
-		// Clear any user config file from previous runs.
-		const userConfigPath = join(testHome, ".pi", "browser-config.json");
-		try {
-			writeFileSync(userConfigPath, "{}", "utf-8");
-		} catch {
-			// ignore
-		}
-		// Mock global fetch.
+		cleanupConfig();
 		vi.stubGlobal("fetch", async () => {
 			throw new Error("fetch not mocked");
 		});
@@ -45,64 +35,51 @@ describe("browser-config", () => {
 
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		cleanupConfig();
 	});
 
 	// --- Config loading ---
 
 	describe("config loading", () => {
-		it("loads extension defaults when no user config exists", async () => {
-			const oldHome = withHome(testHome);
-			try {
-				const { cfg } = await import("../extensions/browser-config.js");
-				expect(cfg.keepTabVisibleMs).toBe(15000);
-				expect(cfg.chromePort).toBe(9333);
-				expect(cfg.browserTimeoutMs).toBe(60000);
-				expect(cfg.scrollDynamicDefault).toBe(true);
-				expect(cfg.browserLaunchBrowser).toBe(true);
-			} finally {
-				restoreHome(oldHome);
-			}
+		it("loads defaults when config file is missing", async () => {
+			vi.resetModules();
+			const { cfg } = await import("../extensions/browser-config.js");
+			expect(cfg.keepTabVisibleMs).toBe(15000);
+			expect(cfg.chromePort).toBe(9333);
+			expect(cfg.browserTimeoutMs).toBe(60000);
+			expect(cfg.scrollDynamicDefault).toBe(true);
+			expect(cfg.browserLaunchBrowser).toBe(true);
 		});
 
-		it("loads descriptions from bundled config", async () => {
-			const oldHome = withHome(testHome);
-			try {
-				const { descriptions } = await import("../extensions/browser-config.js");
-				expect(descriptions.keepTabVisibleMs).toBe("Tab visible delay after extraction (Ms).");
-				expect(descriptions.chromePort).toBe("Chrome --remote-debugging-port number.");
-				expect(descriptions.browserTimeoutMs).toBe("Default timeout for browser_execute snippets (Ms).");
-				expect(descriptions.maxTimeoutMs).toBe("Hard cap on execution timeout (Ms).");
-				expect(descriptions.maxMetadataLength).toBe("Output truncation threshold (chars).");
-				expect(descriptions.CONFIG_VERSION).toBe("Internal version stamp. Do not edit.");
-			} finally {
-				restoreHome(oldHome);
-			}
+		it("creates config file on first load", async () => {
+			vi.resetModules();
+			const { cfg } = await import("../extensions/browser-config.js");
+			expect(existsSync(configPath)).toBe(true);
+			const content = JSON.parse(readFileSync(configPath, "utf-8"));
+			expect(content.keepTabVisibleMs).toBe(15000);
+			expect(content.chromePort).toBe(9333);
 		});
 
-		it("strips _descriptions from merged config", async () => {
-			const oldHome = withHome(testHome);
-			try {
-				const { cfg } = await import("../extensions/browser-config.js");
-				expect(cfg["_descriptions"]).toBeUndefined();
-				expect(cfg.CONFIG_VERSION).toBe(1);
-			} finally {
-				restoreHome(oldHome);
-			}
+		it("loads descriptions", async () => {
+			vi.resetModules();
+			const { descriptions } = await import("../extensions/browser-config.js");
+			expect(descriptions.keepTabVisibleMs).toBe("Tab visible delay after extraction (Ms).");
+			expect(descriptions.chromePort).toBe("Chrome --remote-debugging-port number.");
+			expect(descriptions.browserTimeoutMs).toBe("Default timeout for browser_execute snippets (Ms).");
+			expect(descriptions.maxTimeoutMs).toBe("Hard cap on execution timeout (Ms).");
+			expect(descriptions.maxMetadataLength).toBe("Output truncation threshold (chars).");
+			expect(descriptions.CONFIG_VERSION).toBe("Internal version stamp. Do not edit.");
 		});
 
-		it("user config overrides extension defaults", async () => {
-			const oldHome = withHome(testHome);
-			try {
-				const userConfigPath = join(testHome, ".pi", "browser-config.json");
-				// Pre-write a user config.
-				writeFileSync(userConfigPath, JSON.stringify({ keepTabVisibleMs: 5000, chromePort: 9999 }), "utf-8");
-
-				// Need to clear module cache to reimport with new HOME.
-				const { cfg } = await import("../extensions/browser-config.js");
-				expect(cfg.keepTabVisibleMs).toBe(15000); // Still uses defaults since module is cached
-			} finally {
-				restoreHome(oldHome);
-			}
+		it("backfills missing keys on extension upgrade", async () => {
+			vi.resetModules();
+			writeFileSync(configPath, JSON.stringify({
+				keepTabVisibleMs: 15000,
+				CONFIG_VERSION: 1,
+			}), "utf-8");
+			const { cfg } = await import("../extensions/browser-config.js");
+			expect(cfg.chromePort).toBe(9333);
+			expect(cfg.chromeProfileDir).toBe("");
 		});
 	});
 
@@ -110,17 +87,20 @@ describe("browser-config", () => {
 
 	describe("setConfigValue", () => {
 		it("rejects unknown keys", async () => {
+			vi.resetModules();
 			const { setConfigValue } = await import("../extensions/browser-config.js");
 			expect(setConfigValue("unknownKey", "123")).toBe("unknown: unknownKey");
 		});
 
 		it("rejects non-finite numeric values", async () => {
+			vi.resetModules();
 			const { setConfigValue } = await import("../extensions/browser-config.js");
 			expect(setConfigValue("keepTabVisibleMs", "abc")).toBe("invalid: keepTabVisibleMs=abc");
 			expect(setConfigValue("keepTabVisibleMs", "")).toBe("invalid: keepTabVisibleMs=");
 		});
 
 		it("accepts valid numeric values", async () => {
+			vi.resetModules();
 			const { setConfigValue, cfg } = await import("../extensions/browser-config.js");
 			const result = setConfigValue("keepTabVisibleMs", "30000");
 			expect(result).toBe("keepTabVisibleMs=30000");
@@ -128,6 +108,7 @@ describe("browser-config", () => {
 		});
 
 		it("accepts true/false for boolean keys", async () => {
+			vi.resetModules();
 			const { setConfigValue } = await import("../extensions/browser-config.js");
 			expect(setConfigValue("scrollDynamicDefault", "true")).toBe("scrollDynamicDefault=true");
 			expect(setConfigValue("scrollDynamicDefault", "false")).toBe("scrollDynamicDefault=false");
@@ -137,6 +118,7 @@ describe("browser-config", () => {
 		});
 
 		it("accepts string values for string keys", async () => {
+			vi.resetModules();
 			const { setConfigValue } = await import("../extensions/browser-config.js");
 			const result = setConfigValue("chromeProfileDir", "/home/user/.cache/puppeteer");
 			expect(result).toBe("chromeProfileDir=/home/user/.cache/puppeteer");
@@ -147,6 +129,7 @@ describe("browser-config", () => {
 
 	describe("Chrome HTTP helpers", () => {
 		it("returns connected when Chrome responds to /json/version", async () => {
+			vi.resetModules();
 			vi.stubGlobal(
 				"fetch",
 				async (url: string) => {
@@ -164,6 +147,7 @@ describe("browser-config", () => {
 		});
 
 		it("returns not connected when Chrome is unreachable", async () => {
+			vi.resetModules();
 			vi.stubGlobal(
 				"fetch",
 				async () => {
@@ -177,15 +161,15 @@ describe("browser-config", () => {
 		});
 
 		it("lists Chrome tabs", async () => {
-			const tabs = [
-				{ id: "1", type: "page", title: "Example", url: "https://example.com", webSocketDebuggerUrl: "ws://..." },
-				{ id: "2", type: "page", title: "Google", url: "https://google.com", webSocketDebuggerUrl: "ws://..." },
-			];
+			vi.resetModules();
 			vi.stubGlobal(
 				"fetch",
 				async (url: string) => {
 					if (url.includes("/json/list")) {
-						return { ok: true, json: async () => tabs };
+						return { ok: true, json: async () => [
+							{ id: "1", type: "page", title: "Example", url: "https://example.com", webSocketDebuggerUrl: "ws://..." },
+							{ id: "2", type: "page", title: "Google", url: "https://google.com", webSocketDebuggerUrl: "ws://..." },
+						]};
 					}
 					throw new Error("unexpected URL");
 				}
@@ -198,6 +182,7 @@ describe("browser-config", () => {
 		});
 
 		it("returns empty array when no tabs", async () => {
+			vi.resetModules();
 			vi.stubGlobal(
 				"fetch",
 				async (url: string) => {
@@ -214,6 +199,7 @@ describe("browser-config", () => {
 		});
 
 		it("closes a Chrome tab", async () => {
+			vi.resetModules();
 			vi.stubGlobal(
 				"fetch",
 				async (url: string) => {
@@ -230,6 +216,7 @@ describe("browser-config", () => {
 		});
 
 		it("returns error when tab close fails", async () => {
+			vi.resetModules();
 			vi.stubGlobal(
 				"fetch",
 				async (url: string) => {

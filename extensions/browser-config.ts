@@ -6,24 +6,17 @@ import { fileURLToPath } from "node:url";
 // ============================================================================
 // Config management
 //
-// Two-tier config:
-//   1. Extension defaults  → ./extensions/browser-config.json (bundled)
-//   2. User overrides      → ~/.pi/browser-config.json (user-edited)
-//
-// User config overrides extension defaults. On first load the extension
-// auto-creates a user config file at ~/.pi/browser-config.json from the
-// bundled defaults so the user can discover and edit them.
+// Config lives next to the extension file: ./extensions/browser-config.json
+// Auto-created on first load with inline defaults; travels with the extension.
 // ============================================================================
 
 const EXT_DIR = dirname(fileURLToPath(import.meta.url));
-const EXT_CONFIG_PATH = join(EXT_DIR, "browser-config.json");
-const USER_CONFIG_DIR = join(process.env.HOME ?? "", ".pi");
-const USER_CONFIG_PATH = join(USER_CONFIG_DIR, "browser-config.json");
+const CONFIG_PATH = join(EXT_DIR, "browser-config.json");
 
 const CONFIG_VERSION = 1;
 
 // Config descriptions — shown in /browser help output.
-const DESCRIPTIONS: Record<string, string> = {
+export const DESCRIPTIONS: Record<string, string> = {
   keepTabVisibleMs: "Tab visible delay after extraction (Ms).",
   chromePort: "Chrome --remote-debugging-port number.",
   chromeProfileDir: "Chrome user-data dir (leave empty for default profile).",
@@ -65,84 +58,45 @@ const STRING_KEYS = new Set([
 ]);
 const ALL_KEYS = [...NUMERIC_KEYS, ...BOOLEAN_KEYS, ...STRING_KEYS];
 
-// Load extension defaults from bundled JSON (or fall back to inline defaults).
-function loadExtensionDefaults(): Record<string, unknown> {
+export const descriptions: Record<string, string> = DESCRIPTIONS;
+
+const cfg: Record<string, number | boolean | string> = (() => {
+  // Read the existing config (null = missing or unreadable/corrupt).
+  let fromFile: Record<string, unknown> | null = null;
   try {
-    if (existsSync(EXT_CONFIG_PATH)) {
-      return JSON.parse(readFileSync(EXT_CONFIG_PATH, "utf-8"));
-    }
+    if (existsSync(CONFIG_PATH)) fromFile = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
   } catch {
-    // ignore — use inline defaults
+    fromFile = null; // corrupt JSON — leave the file untouched, use defaults
   }
-  return { ...DEFAULTS };
-}
-
-// Load user config from ~/.pi/browser-config.json (or null if missing).
-function loadUserConfig(): Record<string, unknown> | null {
-  try {
-    if (existsSync(USER_CONFIG_PATH)) {
-      return JSON.parse(readFileSync(USER_CONFIG_PATH, "utf-8"));
-    }
-  } catch {
-    // corrupt file — leave it untouched
-  }
-  return null;
-}
-
-// Merge defaults + user overrides, write user config if missing.
-const extDefaults = loadExtensionDefaults();
-const userConfig = loadUserConfig();
-
-// Load descriptions from file (if present) and merge with hardcoded defaults.
-const fileDescriptions = (extDefaults as Record<string, unknown>)?.["_descriptions"] as
-  | Record<string, string>
-  | undefined;
-export const descriptions: Record<string, string> = { ...DESCRIPTIONS, ...(fileDescriptions ?? {}) };
-
-// Strip _descriptions from merged config.
-const { _descriptions: _, ...extWithoutDesc }: Record<string, unknown> = extDefaults;
-const { _descriptions: __, ...userWithoutDesc }: Record<string, unknown> = userConfig ?? {};
-
-export const cfg: Record<string, number | boolean | string> = (() => {
-  // Merge: defaults first, then user overrides.
-  const merged = { ...extWithoutDesc, ...(userWithoutDesc ?? {}) } as Record<
+  const merged = { ...DEFAULTS, ...(fromFile ?? {}) } as Record<
     string,
     number | boolean | string
   >;
 
-  // Auto-create user config file on first load so the user can discover settings.
-  if (!existsSync(USER_CONFIG_PATH)) {
+  const stampNeeded = fromFile !== null && fromFile.CONFIG_VERSION !== CONFIG_VERSION;
+  merged.CONFIG_VERSION = CONFIG_VERSION;
+
+  // Write the file when it is absent, or backfill it when an upgrade added new
+  // keys the on-disk file is missing — so users can discover and edit them.
+  // Never overwrite a file that failed to parse (fromFile === null && exists).
+  const fileExists = existsSync(CONFIG_PATH);
+  const backfillNeeded =
+    fromFile !== null && Object.keys(DEFAULTS).some((k) => !(k in fromFile));
+  if (!fileExists || backfillNeeded || stampNeeded) {
     try {
-      writeFileSync(USER_CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");
+      const toWrite: Record<string, number | boolean | string> = {};
+      for (const key of ALL_KEYS) {
+        if (key in merged) toWrite[key] = merged[key]!;
+      }
+      writeFileSync(CONFIG_PATH, JSON.stringify(toWrite, null, 2), "utf-8");
     } catch {
       // best-effort — silent fail
     }
   }
-
-  // Ensure user config file has all known keys (backfill from defaults).
-  if (existsSync(USER_CONFIG_PATH)) {
-    const needsBackfill = ALL_KEYS.some((k) => !(k in merged));
-    if (needsBackfill) {
-      for (const key of ALL_KEYS) {
-        if (!(key in merged) && key in extDefaults) {
-          merged[key] = extDefaults[key]! as number | boolean | string;
-        }
-      }
-      try {
-        const toWrite: Record<string, number | boolean | string> = {};
-        for (const key of ALL_KEYS) {
-          if (key in merged) toWrite[key] = merged[key]!;
-        }
-        toWrite.CONFIG_VERSION = CONFIG_VERSION;
-        writeFileSync(USER_CONFIG_PATH, JSON.stringify(toWrite, null, 2), "utf-8");
-      } catch {
-        // best-effort
-      }
-    }
-  }
-
   return merged;
 })();
+
+export { cfg };
 
 // ============================================================================
 // Runtime state (in-memory only, not persisted)
@@ -230,7 +184,7 @@ function persistConfig(): void {
       if (key in cfg) toWrite[key] = cfg[key]!;
     }
     toWrite.CONFIG_VERSION = CONFIG_VERSION;
-    writeFileSync(USER_CONFIG_PATH, JSON.stringify(toWrite, null, 2), "utf-8");
+    writeFileSync(CONFIG_PATH, JSON.stringify(toWrite, null, 2), "utf-8");
   } catch {
     // best-effort
   }
