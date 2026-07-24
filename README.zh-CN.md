@@ -56,11 +56,37 @@ Pi 会连接已授权的 Chromium 浏览器，打开页面、读取结果，并�
 
 三个工具共享同一个 Chrome 配置用于 session 连续性，都可以使用 `profileDir` 复用已有的 Chrome session。
 
+### `/browser` 命令
+
+管理浏览器工具的 Pi 命令：
+
+| 命令 | 说明 |
+|------|------|
+| `/browser` | 显示 Chrome 连接状态、打开标签数、最后使用的工具、所有配置值 |
+| `/browser tabs` | 列出当前打开的 Chrome 标签页（含 URL 和标题） |
+| `/browser close [index\|all]` | 关闭指定标签页（按索引）或全部 |
+| `/browser set KEY=VAL` | 设置配置值（持久化到 `extensions/browser-config.json`） |
+| `/browser reset` | 清除内存中的运行时状态（最后错误、最后工具） |
+
+可配置值（都可通过 `/browser set` 设置）：
+
+| 键 | 类型 | 默认值 | 说明 |
+|-----|------|---------|------|
+| `keepTabVisibleMs` | number | 15000 | 提取后标签页保持可见的延迟（毫秒）。 |
+| `chromePort` | number | 9333 | Chrome `--remote-debugging-port` 端口号。 |
+| `chromeProfileDir` | string | "" | Chrome 用户数据目录（留空使用默认 profile）。 |
+| `scrollDynamicDefault` | boolean | true | 自动滚动页面以触发懒加载。 |
+| `browserTimeoutMs` | number | 60000 | `browser_execute` 脚本的默认超时（毫秒）。 |
+| `browserLaunchBrowser` | boolean | true | 未运行时自动启动 Chrome。 |
+| `maxTimeoutMs` | number | 600000 | 执行超时硬上限（毫秒）。 |
+| `maxMetadataLength` | number | 30000 | 输出截断阈值（字符数）。 |
+
 ## 给 Pi 提供什么
 
 - `browser_execute`：Pi 可调用的工具名。
 - `web_search`：通过可见 Chrome 浏览器搜索 Google 的工具。
 - `web_fetch`：抓取页面内容并提取结构化 markdown 的工具。
+- `/browser`：管理浏览器工具的 Pi 命令——状态、标签页、配置。
 - `session`：持久 CDP Session，同一个 Pi session 内多次调用会复用状态。
 - `console`：捕获 `log/error/warn/info/debug`，作为工具输出流式返回。
 - 截图收集：成功的 `Page.captureScreenshot` 会自动转成 Pi image content。
@@ -98,12 +124,30 @@ Web-search 工具解决的是“帮 Pi 找资料、总结网页”。`pi-browser
 
 ## 配置
 
-环境变量：
+### 配置文件
+
+配置文件位于扩展目录下：`extensions/browser-config.json`。首次加载时自动创建，可以直接编辑或通过 `/browser` 命令修改。
+
+```bash
+# 查看当前配置
+/browser
+
+# 设置值
+/browser set keepTabVisibleMs=30000
+
+# 查看标签页
+/browser tabs
+
+# 关闭标签页
+/browser close 0
+```
+
+### 环境变量
 
 - `BU_CDP_WS` / `BU_CDP_URL`：默认浏览器 WebSocket endpoint，供 `session.connect()` 使用。
 - `BCODE_SCREENSHOT_DIR`：可选；把截图同时 dump 到本地目录。
 
-一次性加载扩展：
+### 一次性加载扩展
 
 ```bash
 pi -e ./extensions/browser-execute.ts
@@ -118,7 +162,7 @@ npm run typecheck
 npm test
 ```
 
-当前测试覆盖包括：session 复用/隔离、workspace import、console streaming、timeout、screenshot 收集、CDP target 过滤、active sessionId 路由、Pi image content 转换、web search 和 fetch 逻辑、Google 同意弹窗处理、动态滚动、Pi extension adapter 集成。
+当前测试覆盖包括：session 复用/隔离、workspace import、console streaming、timeout、screenshot 收集、CDP target 过滤、active sessionId 路由、Pi image content 转换、web search 和 fetch 逻辑、Google 同意弹窗处理、动态滚动、Pi extension adapter 集成、`/browser` 命令、配置加载/验证和 Chrome HTTP API 辅助函数。
 
 ## 致谢
 

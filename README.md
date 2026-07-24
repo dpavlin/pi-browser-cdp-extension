@@ -32,6 +32,31 @@ Fetch and extract page content from any URL using a visible Chrome browser. Dyna
 
 All three tools share the same Chrome profile for session continuity and can use `profileDir` to reuse an existing Chrome session.
 
+### `/browser` command
+
+A Pi command for managing browser tools:
+
+| Command | Description |
+|---------|-------------|
+| `/browser` | Show Chrome connection status, open tab count, last tool used, and all config values |
+| `/browser tabs` | List open Chrome tabs with URLs and titles |
+| `/browser close [index\|all]` | Close specific tab by index or all tabs |
+| `/browser set KEY=VAL` | Set a configuration value (persisted to `extensions/browser-config.json`) |
+| `/browser reset` | Clear in-memory runtime state (last error, last tool) |
+
+Configuration values (all settable via `/browser set`):
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `keepTabVisibleMs` | number | 15000 | Tab visible delay after extraction (Ms). |
+| `chromePort` | number | 9333 | Chrome `--remote-debugging-port` number. |
+| `chromeProfileDir` | string | "" | Chrome user-data dir (leave empty for default profile). |
+| `scrollDynamicDefault` | boolean | true | Auto-scroll pages to trigger lazy loading. |
+| `browserTimeoutMs` | number | 60000 | Default timeout for `browser_execute` snippets (Ms). |
+| `browserLaunchBrowser` | boolean | true | Auto-launch Chrome if not running. |
+| `maxTimeoutMs` | number | 600000 | Hard cap on execution timeout (Ms). |
+| `maxMetadataLength` | number | 30000 | Output truncation threshold (chars). |
+
 ## Quick Start
 
 ### 1. Install the extension
@@ -61,7 +86,7 @@ Pi will connect to an authorized Chromium browser, drive the page, inspect the r
 - `browser_execute`: Pi-callable tool for running arbitrary JavaScript in the browser.
 - `web_search`: Pi-callable tool for Google search via a visible Chrome browser.
 - `web_fetch`: Pi-callable tool for fetching and extracting page content as structured markdown.
-- `session`: persistent CDP session; multiple calls in the same Pi session reuse browser state.
+- `/browser`: Pi command for managing browser tools — status, tabs, config.
 - `session`: persistent CDP session; multiple calls in the same Pi session reuse browser state.
 - `console`: captures `log`, `error`, `warn`, `info`, and `debug` output and streams it back in the tool result.
 - Screenshot collection: successful `Page.captureScreenshot` calls are automatically converted into Pi image content.
@@ -121,12 +146,43 @@ To customize the Chrome executable path, set `BROWSER_PATH` or `CHROME_BIN` envi
 
 ## Configuration
 
-Environment variables:
+### Configuration file
+
+Config lives next to the extension file: `extensions/browser-config.json`. It is auto-created on first load with defaults and can be edited directly or via the `/browser` command.
+
+```bash
+# Show current config
+/browser
+
+# Set a value
+/browser set keepTabVisibleMs=30000
+
+# Show tabs
+/browser tabs
+
+# Close a tab
+/browser close 0
+```
+
+### Configurable values
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `keepTabVisibleMs` | number | 15000 | Tab visible delay after extraction (Ms). |
+| `chromePort` | number | 9333 | Chrome `--remote-debugging-port` number. |
+| `chromeProfileDir` | string | "" | Chrome user-data dir (leave empty for default profile). |
+| `scrollDynamicDefault` | boolean | true | Auto-scroll pages to trigger lazy loading. |
+| `browserTimeoutMs` | number | 60000 | Default timeout for `browser_execute` snippets (Ms). |
+| `browserLaunchBrowser` | boolean | true | Auto-launch Chrome if not running. |
+| `maxTimeoutMs` | number | 600000 | Hard cap on execution timeout (Ms). |
+| `maxMetadataLength` | number | 30000 | Output truncation threshold (chars). |
+
+### Environment variables
 
 - `BU_CDP_WS` / `BU_CDP_URL`: default browser WebSocket endpoint used by `session.connect()`.
 - `BCODE_SCREENSHOT_DIR`: optional directory where screenshots are also dumped locally.
 
-One-off extension load:
+### One-off extension load
 
 ```bash
 pi -e ./extensions/browser-execute.ts
@@ -141,7 +197,7 @@ npm run typecheck
 npm test
 ```
 
-Current tests cover session reuse/isolation, workspace imports, console streaming, timeout handling, screenshot collection, CDP target filtering, active `sessionId` routing, Pi image content conversion, web search and fetch logic, Google consent handling, dynamic scrolling, and Pi extension adapter integration.
+Current tests cover session reuse/isolation, workspace imports, console streaming, timeout handling, screenshot collection, CDP target filtering, active `sessionId` routing, Pi image content conversion, web search and fetch logic, Google consent handling, dynamic scrolling, Pi extension adapter integration, and the `/browser` command with config loading, validation, and Chrome HTTP API helpers.
 
 ## Acknowledgements
 
