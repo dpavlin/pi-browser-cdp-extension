@@ -5,6 +5,5 @@
   "scrollDynamicDefault": true,
   "browserTimeout": 60000,
   "browserLaunchBrowser": true,
-  "browserProfileDir": "",
   "CONFIG_VERSION": 1
 }

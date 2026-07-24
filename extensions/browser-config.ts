@@ -30,7 +30,6 @@ const DEFAULTS: Record<string, number | boolean | string> = {
   scrollDynamicDefault: true,
   browserTimeout: 60000,
   browserLaunchBrowser: true,
-  browserProfileDir: "",
   CONFIG_VERSION: 1,
 };
 
@@ -46,7 +45,6 @@ const BOOLEAN_KEYS = new Set([
 ]);
 const STRING_KEYS = new Set([
   "chromeProfileDir",
-  "browserProfileDir",
 ]);
 const ALL_KEYS = [...NUMERIC_KEYS, ...BOOLEAN_KEYS, ...STRING_KEYS];
 
