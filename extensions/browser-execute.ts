@@ -31,6 +31,11 @@ const BrowserExecuteParams = Type.Object({
       description: "Optional timeout in milliseconds. Default 60000; maximum 600000. CPU-bound snippets without await yield points may overrun.",
     }),
   ),
+  wsUrl: Type.Optional(
+    Type.String({
+      description: "WebSocket URL to connect to an existing Chrome instance. E.g. ws://127.0.0.1:9333/devtools/browser/<id>",
+    }),
+  ),
 });
 
 function preview(text: string): string {
@@ -58,6 +63,7 @@ Security: CDP controls the connected browser. Only use this tool against browser
     promptGuidelines: [
       "Use browser_execute whenever the task requires driving, inspecting, or screenshotting a real browser through CDP.",
       "Before using browser_execute for page operations, connect with session.connect(), choose a page target from Target.getTargets, and call session.use(targetId).",
+      "Connect via wsUrl (e.g. ws://127.0.0.1:9333/devtools/browser/<id>) or profileDir + launchBrowser.",
       "browser_execute snippets have session and console in scope; write reusable helper modules under .pi/browser-execute-workspace and import them with await import(...).",
       "browser_execute automatically returns Page.captureScreenshot results as image parts; do not manually decode screenshots unless processing bytes is required.",
       "To launch Chrome with a specific profile directory, pass { profileDir: '/path', launchBrowser: true } to session.connect().",
@@ -73,6 +79,7 @@ Security: CDP controls the connected browser. Only use this tool against browser
           workspaceDir,
           profileDir: params.profileDir,
           launchBrowser: params.launchBrowser ?? undefined,
+          wsUrl: params.wsUrl,
           onChunk: (output: string) => {
             onUpdate?.({
               content: [{ type: "text", text: preview(output) }],

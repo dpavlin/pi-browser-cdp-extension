@@ -348,4 +348,113 @@ describe("browser_execute core", () => {
       ),
     ).rejects.toThrow(/browser_execute snippet threw: .*MutationObserver is not defined/);
   });
+
+  // ========================================================================
+  // wsUrl tests
+  // ========================================================================
+
+  describe("wsUrl connection", () => {
+    it("accepts wsUrl parameter in BrowserExecuteParameters", async () => {
+      const workspaceDir = await tmp("pi-browser-workspace-");
+      const sessionID = trackSession("wsurl-session");
+      const session = SessionStore.get(sessionID);
+      
+      // Mock the connect method to verify wsUrl is passed
+      const originalConnect = session.connect.bind(session);
+      let capturedOpts: { wsUrl?: string } = {};
+      (session as any).connect = async (opts: { wsUrl?: string }) => {
+        capturedOpts = opts;
+        // Don't actually connect - just capture the opts
+      };
+
+      await executeBrowserCode(
+        {
+          description: "Test wsUrl connection",
+          code: `return "ok";`,
+          wsUrl: "ws://127.0.0.1:9333/devtools/browser/test",
+        },
+        {
+          sessionID,
+          workspaceDir,
+          profileDir: undefined,
+          launchBrowser: undefined,
+          wsUrl: "ws://127.0.0.1:9333/devtools/browser/test",
+        },
+      );
+
+      expect(capturedOpts.wsUrl).toBe("ws://127.0.0.1:9333/devtools/browser/test");
+
+      // Restore original
+      (session as any).connect = originalConnect;
+    });
+
+    it("wsUrl takes precedence over profileDir when both are provided", async () => {
+      const workspaceDir = await tmp("pi-browser-workspace-");
+      const sessionID = trackSession("wsurl-precedence-session");
+      const session = SessionStore.get(sessionID);
+      
+      // Mock the connect method
+      const originalConnect = session.connect.bind(session);
+      let capturedOpts: Record<string, unknown> = {};
+      (session as any).connect = async (opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+      };
+
+      await executeBrowserCode(
+        {
+          description: "Test wsUrl precedence",
+          code: `return "ok";`,
+          wsUrl: "ws://127.0.0.1:9333/devtools/browser/test",
+        },
+        {
+          sessionID,
+          workspaceDir,
+          profileDir: "/some/profile/dir",
+          launchBrowser: true,
+          wsUrl: "ws://127.0.0.1:9333/devtools/browser/test",
+        },
+      );
+
+      // wsUrl should be used, not profileDir
+      expect(capturedOpts.wsUrl).toBe("ws://127.0.0.1:9333/devtools/browser/test");
+      expect(capturedOpts.profileDir).toBeUndefined();
+
+      // Restore original
+      (session as any).connect = originalConnect;
+    });
+
+    it("wsUrl can be used without profileDir", async () => {
+      const workspaceDir = await tmp("pi-browser-workspace-");
+      const sessionID = trackSession("wsurl-only-session");
+      const session = SessionStore.get(sessionID);
+      
+      // Mock the connect method
+      const originalConnect = session.connect.bind(session);
+      let capturedOpts: Record<string, unknown> = {};
+      (session as any).connect = async (opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+      };
+
+      await executeBrowserCode(
+        {
+          description: "Test wsUrl only",
+          code: `return "ok";`,
+          wsUrl: "ws://127.0.0.1:9333/devtools/browser/test",
+        },
+        {
+          sessionID,
+          workspaceDir,
+          profileDir: undefined,
+          launchBrowser: undefined,
+          wsUrl: "ws://127.0.0.1:9333/devtools/browser/test",
+        },
+      );
+
+      expect(capturedOpts.wsUrl).toBe("ws://127.0.0.1:9333/devtools/browser/test");
+      expect(capturedOpts.profileDir).toBeUndefined();
+
+      // Restore original
+      (session as any).connect = originalConnect;
+    });
+  });
 });

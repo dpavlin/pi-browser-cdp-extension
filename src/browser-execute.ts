@@ -9,6 +9,7 @@ export type BrowserExecuteParameters = {
   code: string;
   description: string;
   timeout?: number;
+  wsUrl?: string;
 };
 
 export type ExecuteContext = {
@@ -16,6 +17,7 @@ export type ExecuteContext = {
   workspaceDir: string;
   profileDir: string | undefined;
   launchBrowser: boolean | undefined;
+  wsUrl?: string;
   onChunk?: (output: string) => void;
 };
 
@@ -119,13 +121,20 @@ export async function executeBrowserCode(args: BrowserExecuteParameters, ctx: Ex
   const session = SessionStore.get(ctx.sessionID);
   await mkdir(ctx.workspaceDir, { recursive: true });
 
-  // Auto-connect if profileDir is provided
-  if (ctx.profileDir && !session.isConnected()) {
-    await session.connect({
-      profileDir: ctx.profileDir,
-      launchBrowser: ctx.launchBrowser ?? true,
-      timeoutMs: args.timeout ?? DEFAULT_TIMEOUT_MS,
-    });
+  // Auto-connect if wsUrl or profileDir is provided
+  if (!session.isConnected()) {
+    if (ctx.wsUrl) {
+      await session.connect({
+        wsUrl: ctx.wsUrl,
+        timeoutMs: args.timeout ?? DEFAULT_TIMEOUT_MS,
+      });
+    } else if (ctx.profileDir) {
+      await session.connect({
+        profileDir: ctx.profileDir,
+        launchBrowser: ctx.launchBrowser ?? true,
+        timeoutMs: args.timeout ?? DEFAULT_TIMEOUT_MS,
+      });
+    }
   }
 
   let wrapped: (...injected: unknown[]) => Promise<unknown>;
