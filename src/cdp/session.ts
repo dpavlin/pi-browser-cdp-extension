@@ -37,7 +37,7 @@ export type DetectedBrowser = {
 };
 
 export class Session implements Transport {
-  private ws?: WebSocket;
+  private ws: WebSocket | undefined;
   private nextId = 1;
   private pending = new Map<number, Pending>();
   private activeSessionId: string | undefined;
@@ -121,41 +121,54 @@ export class Session implements Transport {
     );
   }
 
-  private openWs(wsUrl: string, timeoutMs: number): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      const ws = new WebSocket(wsUrl);
-      let done = false;
+  private async openWs(wsUrl: string, timeoutMs: number, retries = 3): Promise<void> {
+    let lastError: Error | undefined;
 
-      const finish = (error?: Error) => {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        if (error) {
-          try {
-            ws.close();
-          } catch {
-            // Ignore close failures while reporting the original connection error.
-          }
-          reject(error);
-        } else {
-          resolve();
-        }
-      };
+    for (let attempt = 0; attempt < retries; attempt++) {
+      if (attempt > 0) {
+        await sleep(500);
+      }
 
-      const timer = setTimeout(() => finish(new Error(`timed out after ${timeoutMs}ms`)), timeoutMs);
-      ws.addEventListener("open", () => finish());
-      ws.addEventListener("error", (event) =>
-        finish(new Error(`WS error: ${(event as ErrorEvent)?.message ?? "connect failed (likely 403, permission not granted, or port closed)"}`)),
-      );
-      ws.addEventListener("message", (event) => this.onMessage(String(event.data)));
-      ws.addEventListener("close", () => {
-        for (const pending of this.pending.values()) pending.reject(new Error("CDP socket closed"));
-        this.pending.clear();
-        finish(new Error("WS closed before open (likely 403 or port closed)"));
-      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const ws = new WebSocket(wsUrl);
+          let done = false;
 
-      this.ws = ws;
-    });
+          const finish = (error?: Error) => {
+            if (done) return;
+            done = true;
+            clearTimeout(timer);
+            if (error) {
+              try { ws.close(); } catch { /* ignore */ }
+              reject(error);
+            } else {
+              this.ws = ws;
+              resolve();
+            }
+          };
+
+          const timer = setTimeout(() => finish(new Error(`timed out after ${timeoutMs}ms`)), timeoutMs);
+          ws.addEventListener("open", () => finish());
+          ws.addEventListener("error", (event) =>
+            finish(new Error(`WS error: ${(event as ErrorEvent)?.message ?? "connect failed (likely 403, permission not granted, or port closed)"}`)),
+          );
+          ws.addEventListener("message", (event) => this.onMessage(String(event.data)));
+          ws.addEventListener("close", () => {
+            for (const pending of this.pending.values()) pending.reject(new Error("CDP socket closed"));
+            this.pending.clear();
+            if (done) return;
+            finish(new Error("WS closed before open (likely 403 or port closed)"));
+          });
+        });
+        return; // Success
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        // If close event already fired, clear the stale WebSocket reference
+        this.ws = undefined;
+      }
+    }
+
+    throw new Error(`Connection failed after ${retries} retries: ${lastError?.message ?? "unknown"}`);
   }
 
   isConnected(): boolean {
