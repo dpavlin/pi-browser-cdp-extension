@@ -29,6 +29,7 @@ export type CollectedScreenshot = {
 export type ExecuteResult = {
   output: string;
   result: string;
+  code: string;
   screenshots: CollectedScreenshot[];
 };
 
@@ -222,5 +223,5 @@ export async function executeBrowserCode(args: BrowserExecuteParameters, ctx: Ex
     throw new Error(`browser_execute snippet threw: ${snippetThrow.message}`);
   }
 
-  return { output, result: serialize(ran), screenshots };
+  return { output, result: serialize(ran), code: args.code, screenshots };
 }

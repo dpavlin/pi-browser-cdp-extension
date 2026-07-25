@@ -1,0 +1,10 @@
+{
+  "keepTabVisibleMs": 15000,
+  "chromePort": 9333,
+  "browserTimeoutMs": 60000,
+  "maxTimeoutMs": 600000,
+  "maxMetadataLength": 30000,
+  "scrollDynamicDefault": true,
+  "browserLaunchBrowser": true,
+  "chromeProfileDir": ""
+}

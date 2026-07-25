@@ -109,6 +109,7 @@ Security: CDP controls the connected browser. Only use this tool against browser
           ],
           details: {
             description: params.description,
+            code: result.code,
             result: result.result,
             output: preview(result.output),
             screenshotCount: result.screenshots.length,
@@ -123,6 +124,7 @@ Security: CDP controls the connected browser. Only use this tool against browser
           ],
           details: {
             description: params.description,
+            code: params.code,
             error: errMessage,
             workspaceDir,
           },
