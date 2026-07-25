@@ -121,7 +121,11 @@ export class Session implements Transport {
     );
   }
 
-  private async openWs(wsUrl: string, timeoutMs: number, retries = 3): Promise<void> {
+  private async openWs(
+    wsUrl: string,
+    timeoutMs: number,
+    retries = 3,
+  ): Promise<void> {
     let lastError: Error | undefined;
 
     for (let attempt = 0; attempt < retries; attempt++) {
@@ -163,12 +167,40 @@ export class Session implements Transport {
         return; // Success
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
-        // If close event already fired, clear the stale WebSocket reference
         this.ws = undefined;
       }
     }
 
+    // If all retries exhausted and this looks like a browser-level endpoint,
+    // try falling back to a page-level endpoint (handles "already connected"
+    // by another CDP client like rodney).
+    const pageFallback = await this.tryPageFallback(wsUrl, timeoutMs);
+    if (pageFallback) {
+      return;
+    }
+
     throw new Error(`Connection failed after ${retries} retries: ${lastError?.message ?? "unknown"}`);
+  }
+
+  /** When browser-level CDP is already taken, connect to a page-level endpoint instead. */
+  private async tryPageFallback(browserWsUrl: string, timeoutMs: number): Promise<void> {
+    // Extract host:port from the browser wsUrl: ws://127.0.0.1:9333/devtools/browser/...
+    const match = browserWsUrl.match(/^(https?:\/\/[^/]+\/)/);
+    if (!match) return;
+    const baseUrl = match[1];
+
+    try {
+      const res = await fetch(`${baseUrl}json`);
+      if (!res.ok) return;
+      const pages = (await res.json()) as Array<{ id: string; url: string; webSocketDebuggerUrl: string }>;
+      // Prefer a non-about:blank page
+      const page = pages.find((p) => !p.url.startsWith("chrome://") && !p.url.startsWith("devtools://")) ?? pages[0];
+      if (!page) return;
+      await this.openWs(page.webSocketDebuggerUrl, timeoutMs, 2);
+      return;
+    } catch {
+      return;
+    }
   }
 
   isConnected(): boolean {
