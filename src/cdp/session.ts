@@ -208,6 +208,20 @@ export class Session implements Transport {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
+  /** Get all page targets (non-internal, non-background). */
+  async getTargets(): Promise<PageTarget[]> {
+    const { targetInfos } = (await this._call("Target.getTargets", {})) as { targetInfos: PageTarget[] };
+    return targetInfos.filter((t) => t.type === "page" && !t.url.startsWith("chrome://") && !t.url.startsWith("devtools://"));
+  }
+
+  /** Expose `_targetManager._targets` for backward compatibility with agent snippets. */
+  _targetManager: { _targets: PageTarget[] } = { _targets: [] };
+
+  /** Refresh the cached _targetManager._targets list. */
+  async refreshTargets(): Promise<void> {
+    this._targetManager._targets = await this.getTargets();
+  }
+
   close(): void {
     this.ws?.close();
     if (this.chromeProcess) {
