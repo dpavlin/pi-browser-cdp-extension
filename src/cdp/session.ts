@@ -182,24 +182,25 @@ export class Session implements Transport {
     throw new Error(`Connection failed after ${retries} retries: ${lastError?.message ?? "unknown"}`);
   }
 
-  /** When browser-level CDP is already taken, connect to a page-level endpoint instead. */
-  private async tryPageFallback(browserWsUrl: string, timeoutMs: number): Promise<void> {
-    // Extract host:port from the browser wsUrl: ws://127.0.0.1:9333/devtools/browser/...
-    const match = browserWsUrl.match(/^(https?:\/\/[^/]+\/)/);
-    if (!match) return;
-    const baseUrl = match[1];
+  /** When browser-level CDP is already taken, connect to a page-level endpoint instead. Returns true on success. */
+  private async tryPageFallback(browserWsUrl: string, timeoutMs: number): Promise<boolean> {
+    // ws://127.0.0.1:9333/path -> http://127.0.0.1:9333
+    const match = browserWsUrl.match(/^wss?:\/\/([^/:]+):(\d+)(\/.*)?$/);
+    if (!match) return false;
+    const [, host, port] = match;
+    const httpBaseUrl = `http://${host}:${port}/`;
 
     try {
-      const res = await fetch(`${baseUrl}json`);
-      if (!res.ok) return;
+      const res = await fetch(`${httpBaseUrl}json`);
+      if (!res.ok) return false;
       const pages = (await res.json()) as Array<{ id: string; url: string; webSocketDebuggerUrl: string }>;
       // Prefer a non-about:blank page
       const page = pages.find((p) => !p.url.startsWith("chrome://") && !p.url.startsWith("devtools://")) ?? pages[0];
-      if (!page) return;
+      if (!page) return false;
       await this.openWs(page.webSocketDebuggerUrl, timeoutMs, 2);
-      return;
+      return true;
     } catch {
-      return;
+      return false;
     }
   }
 

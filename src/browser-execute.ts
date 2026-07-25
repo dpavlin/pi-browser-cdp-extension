@@ -121,22 +121,6 @@ export async function executeBrowserCode(args: BrowserExecuteParameters, ctx: Ex
   const session = SessionStore.get(ctx.sessionID);
   await mkdir(ctx.workspaceDir, { recursive: true });
 
-  // Auto-connect if wsUrl or profileDir is provided
-  if (!session.isConnected()) {
-    if (ctx.wsUrl) {
-      await session.connect({
-        wsUrl: ctx.wsUrl,
-        timeoutMs: args.timeout ?? DEFAULT_TIMEOUT_MS,
-      });
-    } else if (ctx.profileDir) {
-      await session.connect({
-        profileDir: ctx.profileDir,
-        launchBrowser: ctx.launchBrowser ?? true,
-        timeoutMs: args.timeout ?? DEFAULT_TIMEOUT_MS,
-      });
-    }
-  }
-
   let wrapped: (...injected: unknown[]) => Promise<unknown>;
   try {
     wrapped = new AsyncFunction("session", "console", "__import", args.code.replaceAll("import(", "__import("));
@@ -189,20 +173,45 @@ export async function executeBrowserCode(args: BrowserExecuteParameters, ctx: Ex
     snippetError = error instanceof Error ? error : new Error(String(error));
   };
 
+  // Start global listening BEFORE connection so async errors from
+  // connect() or the snippet are caught and returned to the agent
+  // instead of crashing the Pi process.
   activeCatchers.add(localCatcher);
   startGlobalListening();
 
   try {
+    // Auto-connect if wsUrl or profileDir is provided — wrapped in try/catch
+    // so connection errors don't crash the agent.
+    if (!session.isConnected()) {
+      try {
+        if (ctx.wsUrl) {
+          await session.connect({
+            wsUrl: ctx.wsUrl,
+            timeoutMs: args.timeout ?? DEFAULT_TIMEOUT_MS,
+          });
+        } else if (ctx.profileDir) {
+          await session.connect({
+            profileDir: ctx.profileDir,
+            launchBrowser: ctx.launchBrowser ?? true,
+            timeoutMs: args.timeout ?? DEFAULT_TIMEOUT_MS,
+          });
+        }
+      } catch (error) {
+        throw new Error(`connection failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
     const timeoutMs = Math.min(args.timeout ?? DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS);
     const ran = await Promise.race([wrapped(session, snippetConsole, dynamicImport), timeoutSignal(timeoutMs)]);
     await new Promise((resolve) => setImmediate(resolve));
     if (snippetError) {
-      throw snippetError;
+      const e = snippetError as Error;
+      throw new Error(`browser_execute snippet threw: ${e.message}`);
     }
     return { output, result: serialize(ran), screenshots };
   } catch (error) {
     await new Promise((resolve) => setImmediate(resolve));
-    const finalError = snippetError ?? error;
+    const finalError = snippetError ?? (error instanceof Error ? error : new Error(String(error)));
     throw new Error(`browser_execute snippet threw: ${finalError instanceof Error ? finalError.message : String(finalError)}`);
   } finally {
     activeCatchers.delete(localCatcher);
