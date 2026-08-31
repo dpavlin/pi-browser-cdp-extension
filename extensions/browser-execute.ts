@@ -62,11 +62,13 @@ Security: CDP controls the connected browser. Only use this tool against browser
     promptSnippet: "Execute JavaScript snippets against a real Chromium browser via CDP.",
     promptGuidelines: [
       "Use browser_execute whenever the task requires driving, inspecting, or screenshotting a real browser through CDP.",
+      "Always use console.log(...) to output step-by-step progress, intermediate findings, URLs, and DOM inspection details during execution; console output streams live to the user and is returned in the tool result.",
       "Before using browser_execute for page operations, connect with session.connect(), choose a page target from Target.getTargets, and call session.use(targetId).",
       "Connect via wsUrl (e.g. ws://127.0.0.1:9333/devtools/browser/<id>) or profileDir + launchBrowser.",
       "browser_execute snippets have session and console in scope; write reusable helper modules under .pi/browser-execute-workspace and import them with await import(...).",
       "browser_execute automatically returns Page.captureScreenshot results as image parts; do not manually decode screenshots unless processing bytes is required.",
       "To launch Chrome with a specific profile directory, pass { profileDir: '/path', launchBrowser: true } to session.connect().",
+      "To stream web page logs or errors, call await session.Runtime.enable() and forward Runtime.consoleAPICalled / Runtime.exceptionThrown events via console.log.",
     ],
     parameters: BrowserExecuteParams,
     async execute(_toolCallId, params, _signal, onUpdate, ctx) {

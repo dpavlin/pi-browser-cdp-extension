@@ -46,6 +46,8 @@ describe("CDP session helpers", () => {
     const originalHome = process.env.HOME;
     const home = await tmp("pi-browser-home-");
     process.env.HOME = home;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error("Connection refused"));
     try {
       const chromeDir = path.join(home, "Library", "Application Support", "Google", "Chrome");
       await mkdir(chromeDir, { recursive: true });
@@ -53,6 +55,7 @@ describe("CDP session helpers", () => {
 
       expect(await detectBrowsers()).toEqual([]);
     } finally {
+      globalThis.fetch = originalFetch;
       if (originalHome === undefined) delete process.env.HOME;
       else process.env.HOME = originalHome;
     }
